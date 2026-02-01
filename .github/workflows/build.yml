@@ -1,0 +1,43 @@
+name: Build and Push
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: arc-runners
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Set up Maven
+        uses: stCarolas/setup-maven@v5
+        with:
+          maven-version: 3.9.6
+
+      - name: Build with Maven
+        run: mvn -B package -DskipTests
+
+      - name: Build and push Docker image
+        run: |
+          # Build images with both latest and commit SHA tags
+          docker build -t docker-registry.docker-registry:5000/backend-rest:latest .
+          docker build -t docker-registry.docker-registry:5000/backend-rest:${{ github.sha }} .
+          
+          # Push to internal registry (no auth needed)
+          docker push docker-registry.docker-registry:5000/backend-rest:latest
+          docker push docker-registry.docker-registry:5000/backend-rest:${{ github.sha }}
+
+      - name: Restart deployment
+        run: |
+          # Optional: trigger a rollout restart to pick up the new image
+          # Requires kubectl configured in the runner
+          echo "Image pushed successfully. ArgoCD will sync the deployment."
